@@ -156,7 +156,7 @@ The script logs its activities to a file named `download_log.log` in the current
 You can create a standalone executable using PyInstaller:
 
 ```bash
-pyinstaller --onefile --distpath /path/to/your/desired/folder download.py
+pyinstaller --onefile --distpath /path/to/your/desired/folder your_script.py
 ```
 
 Replace `/path/to/your/desired/folder` with the path to the folder where you want the executable to be placed. Add the ```.exe``` to ```PATH``` for global usage of the executable.
