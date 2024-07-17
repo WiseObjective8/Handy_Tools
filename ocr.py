@@ -5,7 +5,6 @@ import io
 import pyperclip
 import numpy as np
 
-
 class OCR:
     def __init__(self, tess: str = "C:\\Program Files\\Tesseract-OCR\\tesseract.exe"):
         pytesseract.pytesseract.tesseract_cmd = tess
