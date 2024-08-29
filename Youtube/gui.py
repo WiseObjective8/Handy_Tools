@@ -1,134 +1,139 @@
-# pylint: disable = missing-function-docstring
-# pylint: disable = missing-class-docstring
-# pylint: disable = broad-exception-caught
 import sys
-import os
-from typing import Union
-# pylint: disable = no-name-in-module
+from PyQt5.QtGui import QDesktopServices
+from PyQt5.QtCore import (
+    QThreadPool,
+    QSize, 
+    Qt, 
+    QRect, 
+    QFileInfo, 
+    QFile, 
+    QDir, 
+    QUrl
+)
 from PyQt5.QtWidgets import (
+    QMainWindow,
     QApplication,
-    QWidget,
-    QVBoxLayout,
     QHBoxLayout,
+    QVBoxLayout,
+    QCheckBox,
+    QRadioButton,
+    QProgressBar,
     QLabel,
     QLineEdit,
-    QRadioButton,
+    QWidget,
+    QGraphicsView,
     QPushButton,
-    QButtonGroup,
+    QTreeView,
+    QFileSystemModel,
     QMessageBox,
-    QCheckBox,
 )
-from PyQt5.QtCore import QRunnable, QThreadPool, pyqtSlot, pyqtSignal, QObject
-from Youtube.yt_vid_logic import YT
-from Youtube.yt_playlist_logic import PL
+from Youtube.gui_helpers import show_alert, DownloadWorker
 from Youtube.logic_helpers import APP_PATH
 
 
-def show_alert(msg: Union[str, None] = None):
-    alert = QMessageBox()
-    alert.setWindowTitle("Alert")
-    alert.setText(msg)
-    alert.setIcon(QMessageBox.Information)
-    alert.setStandardButtons(QMessageBox.Ok)
-    alert.exec_()
+class MainWindow(QMainWindow):
+    def __init__(self, *args, **kwargs):
+        super(MainWindow, self).__init__(*args, **kwargs)
 
+        # Set up the UI
+        self.setWindowTitle("Youtube Downloader")
+        self.resize(549, 390)
+        self.setMinimumSize(QSize(549, 390))
+        self.setMaximumSize(QSize(549, 390))
+        self.setFocusPolicy(Qt.TabFocus)
+        self.setAutoFillBackground(False)
 
-class WorkerSignals(QObject):
-    completed = pyqtSignal(str)
+        self.centralwidget = QWidget(self)
+        self.setCentralWidget(self.centralwidget)
 
+        self.layoutWidget = QWidget(self.centralwidget)
+        self.layoutWidget.setGeometry(QRect(10, 0, 527, 386))
 
-class DownloadWorker(QRunnable):
-    def __init__(self, url: str, is_playlist: bool, file_type: int, resolution: int):
-        super().__init__()
-        self.url = url
-        self.is_playlist = is_playlist
-        self.file_type = file_type
-        self.resolution = resolution
-        self.signals = WorkerSignals()
+        self.central_layout = QVBoxLayout(self.layoutWidget)
+        self.central_layout.setContentsMargins(0, 0, 0, 0)
 
-    @pyqtSlot()
-    def run(self):
-        try:
-            if self.is_playlist:
-                downloader = PL(self.url)
-                downloader.download_playlist(self.file_type, self.resolution)
-            else:
-                downloader = YT(self.url)
-                downloader.download_video(self.file_type, self.resolution)
+        self.url_layout = QHBoxLayout()
+        self.url_label = QLabel("URL", self.layoutWidget)
+        self.url_input = QLineEdit(self.layoutWidget)
+        self.url_layout.addWidget(self.url_label)
+        self.url_layout.addWidget(self.url_input)
+        self.central_layout.addLayout(self.url_layout)
 
-            # Emit signal when done
-            self.signals.completed.emit(f"{downloader.title} is downloaded")
+        self.th_files_layout = QHBoxLayout()
+        self.bar_layout = QVBoxLayout()
+        self.thumbnail = QGraphicsView(self.layoutWidget)
+        self.bar_layout.addWidget(self.thumbnail)
 
-        except Exception as e:
-            self.signals.completed.emit(f"{str(e)}")
+        self.options_layout = QHBoxLayout()
+        self.play_vid_layout = QVBoxLayout()
+        self.video_check = QRadioButton("Video", self.layoutWidget)
+        self.playlist_check = QRadioButton("Playlist", self.layoutWidget)
+        self.play_vid_layout.addWidget(self.video_check)
+        self.play_vid_layout.addWidget(self.playlist_check)
+        self.options_layout.addLayout(self.play_vid_layout)
 
+        self.type_layout = QVBoxLayout()
+        self.mp3 = QCheckBox("MP3", self.layoutWidget)
+        self.mp4 = QCheckBox("MP4", self.layoutWidget)
+        self.merged = QCheckBox("Merged", self.layoutWidget)
+        self.type_layout.addWidget(self.mp3)
+        self.type_layout.addWidget(self.mp4)
+        self.type_layout.addWidget(self.merged)
+        self.options_layout.addLayout(self.type_layout)
 
-class DownloaderGUI(QWidget):
-    def __init__(self) -> None:
-        super().__init__()
-        self.__path = APP_PATH
+        self.res_layout = QVBoxLayout()
+        self._480p = QCheckBox("480p", self.layoutWidget)
+        self._720p = QCheckBox("720p", self.layoutWidget)
+        self._1080p = QCheckBox("1080p", self.layoutWidget)
+        self.res_layout.addWidget(self._480p)
+        self.res_layout.addWidget(self._720p)
+        self.res_layout.addWidget(self._1080p)
+        self.options_layout.addLayout(self.res_layout)
+
+        self.bar_layout.addLayout(self.options_layout)
+
+        self.progressBar = QProgressBar(self.layoutWidget)
+        self.progressBar.setProperty("value", 100)
+        self.progressBar.setAlignment(Qt.AlignCenter)
+        self.progressBar.setTextVisible(False)
+        self.progressBar.setOrientation(Qt.Horizontal)
+        self.bar_layout.addWidget(self.progressBar)
+
+        self.th_files_layout.addLayout(self.bar_layout)
+
+        self.file_view = QTreeView(self.layoutWidget)
+        self.th_files_layout.addWidget(self.file_view)
+
+        self.central_layout.addLayout(self.th_files_layout)
+
+        self.buttons_layout = QHBoxLayout()
+        self.download_btn = QPushButton("Download", self.layoutWidget)
+        self.open_file_btn = QPushButton("Open", self.layoutWidget)
+        self.del_file_btn = QPushButton("Delete", self.layoutWidget)
+        self.close_btn = QPushButton("Close", self.layoutWidget)
+
+        self.buttons_layout.addWidget(self.download_btn)
+        self.buttons_layout.addWidget(self.open_file_btn)
+        self.buttons_layout.addWidget(self.del_file_btn)
+        self.buttons_layout.addWidget(self.close_btn)
+
+        self.central_layout.addLayout(self.buttons_layout)
+
+        # Set up file view
+        self.model = QFileSystemModel()
+        self.model.setRootPath(APP_PATH)
+        self.file_view.setModel(self.model)
+        self.file_view.setRootIndex(self.model.index(APP_PATH))
+        self.file_view.clicked.connect(self.on_clicked)
+
+        # Set up thread pool
         self.thread_pool = QThreadPool()
-        self.init_ui()
 
-    def init_ui(self):
-        self.setWindowTitle("YouTube Downloader")
-        self.setGeometry(100, 100, 400, 400)
-        self.setFixedSize(400, 400)
-
-        layout = QVBoxLayout()
-
-        # URL input layout
-        url_layout = QHBoxLayout()
-        url_label = QLabel("URL:")
-        self.url_input = QLineEdit()
-        url_layout.addWidget(url_label)
-        url_layout.addWidget(self.url_input)
-
-        # Type selection layout
-        type_layout = QHBoxLayout()
-        self.radio_video = QRadioButton("Video")
-        self.radio_playlist = QRadioButton("Playlist")
-        type_group = QButtonGroup(self)
-        type_group.addButton(self.radio_video)
-        type_group.addButton(self.radio_playlist)
-        type_layout.addWidget(self.radio_video)
-        type_layout.addWidget(self.radio_playlist)
-
-        # File format options layout
-        options_layout = QHBoxLayout()
-        self.audio_check = QCheckBox("MP3")
-        self.video_check = QCheckBox("MP4")
-        options_layout.addWidget(self.audio_check)
-        options_layout.addWidget(self.video_check)
-
-        # Resolution selection layout
-        format_layout = QHBoxLayout()
-        self.res_1080p = QRadioButton("1080p")
-        self.res_720p = QRadioButton("720p")
-        self.res_480p = QRadioButton("480p")
-        format_layout.addWidget(self.res_1080p)
-        format_layout.addWidget(self.res_720p)
-        format_layout.addWidget(self.res_480p)
-
-        # Buttons layout
-        buttons_layout = QHBoxLayout()
-        self.download_button = QPushButton("Download")
-        self.show_button = QPushButton("Show")
-        buttons_layout.addWidget(self.download_button)
-        buttons_layout.addWidget(self.show_button)
-
-        # Adding layouts to the main layout
-        layout.addLayout(url_layout)
-        layout.addLayout(type_layout)
-        layout.addLayout(options_layout)
-        layout.addLayout(format_layout)
-        layout.addLayout(buttons_layout)
-
-        self.setLayout(layout)
-
-        # Connecting signals to slots
-        self.download_button.clicked.connect(self.start_download)
-        self.show_button.clicked.connect(self.show_files)
+        # Connect buttons
+        self.download_btn.clicked.connect(self.start_download)
+        self.open_file_btn.clicked.connect(self.open_selected)
+        self.del_file_btn.clicked.connect(self.delete_selected)
+        self.close_btn.clicked.connect(self.close)
 
     def start_download(self):
         url = self.url_input.text().strip()
@@ -136,22 +141,18 @@ class DownloaderGUI(QWidget):
             show_alert("Please enter a valid URL.")
             return
 
-        is_playlist = self.radio_playlist.isChecked()
-        if not (self.radio_video.isChecked() or is_playlist):
+        is_playlist = self.playlist_check.isChecked()
+        if not (self.video_check.isChecked() or is_playlist):
             show_alert("Please select 'Video' or 'Playlist'.")
             return
 
         file_type = (
             3
-            if self.audio_check.isChecked() and self.video_check.isChecked()
-            else (
-                1
-                if self.audio_check.isChecked()
-                else 2 if self.video_check.isChecked() else 3
-            )
+            if self.mp3.isChecked() and self.mp4.isChecked()
+            else (1 if self.mp3.isChecked() else 2 if self.mp4.isChecked() else 3)
         )
         resolution = (
-            3 if self.res_480p.isChecked() else 2 if self.res_720p.isChecked() else 1
+            3 if self._480p.isChecked() else 2 if self._720p.isChecked() else 1
         )
 
         # Create worker and connect the completion signal
@@ -159,20 +160,35 @@ class DownloaderGUI(QWidget):
         worker.signals.completed.connect(show_alert)
         self.thread_pool.start(worker)
 
-    def show_files(self):
-        try:
-            if sys.platform == "win32":
-                os.startfile(self.__path)
-            elif sys.platform == "darwin":
-                os.system(f"open {self.__path}")
-            else:
-                os.system(f"xdg-open {self.__path}")
-        except Exception as e:
-            show_alert(f"{str(e)}")
+    def open_selected(self):
+        if hasattr(self, "selected_path") and QFileInfo(self.selected_path).isFile():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(self.selected_path))
+
+    def delete_selected(self):
+        if hasattr(self, "selected_path"):
+            reply = QMessageBox.question(
+                self,
+                "Confirm Delete",
+                f"Are you sure you want to delete '{self.selected_path}'?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if reply == QMessageBox.Yes:
+                if QFileInfo(self.selected_path).isDir():
+                    QDir(self.selected_path).removeRecursively()
+                else:
+                    QFile.remove(self.selected_path)
+                # QMessageBox.information(
+                #     self, "Deleted", f"'{self.selected_path}' has been deleted."
+                # )
+                self.file_view.setRootIndex(self.model.index(APP_PATH))
+
+    def on_clicked(self, index):
+        self.selected_path = self.model.filePath(index)
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    downloader_gui = DownloaderGUI()
-    downloader_gui.show()
+    window = MainWindow()
+    window.show()
     sys.exit(app.exec_())
