@@ -1,34 +1,20 @@
-'''Hepler methods for yt_vid and yt_playlist'''
+"""Hepler methods for yt_vid and yt_playlist"""
+
 import os
 import re
-from Youtube.logs import log_setup, logging
-
-log_setup()
-
+from Youtube.logs import log_exception
+from Youtube.errors import InvalidURLError
 
 APP_PATH = os.path.join(os.path.expanduser("~"), "Downloads", "YoutubeDownloader")
 
 
 def handle_errors(custom_exception):
-    """
-    A decorator for handling exceptions in functions.
-
-    This decorator wraps a function and catches any exceptions that occur during its execution. 
-    If an exception is raised, it logs the error and raises a specified custom exception.
-
-    Args:
-        custom_exception (Exception): The custom exception to raise when an error occurs.
-
-    Returns:
-        function: The wrapped function that includes error handling.
-    """
-
     def decorator(func):
         def wrapper(*args, **kwargs):
             try:
                 return func(*args, **kwargs)
             except Exception as e:
-                logging.error(e)
+                log_exception(e)
                 raise custom_exception from e
 
         return wrapper
@@ -37,18 +23,18 @@ def handle_errors(custom_exception):
 
 
 def sanitize_filename(filename: str) -> str:
-    """
-    Sanitizes a filename by removing invalid characters.
-
-    This function takes a filename as input and removes any characters that are invalid in file names. 
-    It ensures that the resulting filename is safe for use in file operations.
-
-    Args:
-        filename (str): The original filename to sanitize.
-
-    Returns:
-        str: The sanitized filename with invalid characters removed.
-"""
-
     invalid_chars_pattern = r'[\\\/:*?"<>|]'
     return re.sub(invalid_chars_pattern, "", filename)
+
+def url_check(url: str) -> int:
+    vid_regex = re.compile(r"^((?:https?:)?\/\/)?((?:www|m)\.)?((?:youtube\.com|youtu.be))(\/(?:[\w\-]+\?v=|embed\/|v\/)?)([\w\-]+)(\S+)?$")
+    playlist_regex = re.compile(r"(?:http|https|)(?::\/\/|)(?:www.|)(?:youtu\.be\/|youtube\.com(?:\/embed\/|\/v\/|\/watch\?v=|\/ytscreeningroom\?v=|\/feeds\/api\/videos\/|\/user\S*[^\w\-\s]|\S*[^\w\-\s]))([\w\-]{12,})[a-z0-9;:@#?&%=+\/\$_.-]*")
+    try:
+        if re.match(playlist_regex, url):
+            return 1
+        elif re.match(vid_regex, url):
+            return 0
+        else:
+            raise InvalidURLError(f"{url} is invalid")
+    except Exception as e:
+        log_exception(e)
